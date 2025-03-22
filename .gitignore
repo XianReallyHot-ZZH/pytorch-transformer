@@ -1,0 +1,13 @@
+__pycache__
+*.pt
+*.json
+runs/
+weights/
+
+wandb/
+
+.idea/
+
+.vscode/
+
+
