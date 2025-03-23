@@ -156,20 +156,54 @@ class MultiHeadAttentionBlock(nn.Module):
         # (batch, seq_len, d_model) --> (batch, seq_len, d_model)
         return self.w_o(x)
 
-# '''
-# 残差连接，其实就是论文里用于在多个层之间进行跳跃连接的那个机制
-# '''
-# class ResidualConnection(nn.Module):
-#
-#     def __init__(self, dropout: float) -> None:
-#         super().__init__()
-#
-#
-#     def forward(self, x, sublayer):
+'''
+残差连接，其实就是论文里用于在多个层之间进行跳跃连接的那个机制
+'''
+class ResidualConnection(nn.Module):
 
+    def __init__(self, features: int, dropout: float) -> None:
+        super().__init__()
+        self.dropout = nn.Dropout(dropout)
+        self.norm = LayerNormalization(features)
 
+    def forward(self, x, sublayer):
+        # 一次跳跃，Add + Norm操作，实操上和论文有点区别，论文里先过一层sublayer，再过Norm，
+        # 这里是先过Norm，再过sublayer，看了很多复现工程，都是样的，我们也这样实现
+        return x + self.dropout(sublayer(self.norm(x)))
 
+'''
+编码器中的一个block（单元），内含两个残差连接，一个多头注意力block，一个前向连接block
+'''
+class EncoderBlock(nn.Module):
 
+    def __init__(self, features: int, self_attention_block: MultiHeadAttentionBlock, feed_forward_block: FeedForwardBlock, dropout: float) ->  None:
+        self.self_attention_block = self_attention_block
+        self.feed_forward_block = feed_forward_block
+        self.residual_connections = nn.ModuleList([ResidualConnection(features, dropout) for _ in range(2)])
+
+    def forward(self, x, src_mask):
+        # 第一个残差连接，多头注意力block
+        x = self.residual_connections[0](x, lambda x: self.self_attention_block(x, x, x, src_mask))
+        # 第二个残差连接，前向连接block
+        x = self.residual_connections[1](x, self.feed_forward_block)
+        return x
+
+'''
+编码器完整实现，内含N个EncoderBlock
+'''
+class Encoder(nn.Module):
+
+    def __init__(self, layers: nn.ModuleList) -> None:
+        super().__init__()
+        self.layers = layers
+        self.norm = LayerNormalization()
+
+    def forward(self, x, mask):
+        # 过N个EncoderBlock
+        for layer in self.layers:
+            x = layer(x, mask)
+        # 功能实现上最后过一道Norm
+        return self.norm(x)
 
 
 
