@@ -95,66 +95,66 @@ class FeedForwardBlock(nn.Module):
         # (batch, seq_len, d_model) --> (batch, seq_len, d_ff) --> (batch, seq_len, d_model)
         x = self.linear_2(self.dropout(torch.relu(self.linear_1(x))))   # 这里其实就是对论文里关于前向网络的公式进行实现
 
-# '''
-# 多头注意力机制的具体实现
-# '''
-# class MultiHeadAttentionBlock(nn.Module):
-#
-#     def __init__(self, d_model: int, h: int, dropout: float) -> None:
-#         super().__init__()
-#         self.d_model = d_model  # Embedding vector size
-#         self.h = h  # Number of heads
-#         # Make sure d_model is divisible by h
-#         assert d_model % h == 0, "d_model is not divisible by h"
-#
-#         self.d_k = d_model // h # Dimension of vector seen by each head 每一个头的向量维度
-#         self.w_q = nn.Linear(d_model, d_model)  # 对应多头注意力block中的第一个输入要乘的矩阵 Wq
-#         self.w_k = nn.Linear(d_model, d_model)  # 对应多头注意力block中的第二个输入要乘的矩阵 Wk
-#         self.w_v = nn.Linear(d_model, d_model)  # 对应多头注意力block中的第三个输入要乘的矩阵 Wv
-#
-#         self.w_o = nn.Linear(d_model, d_model)  # 多头concat之后的输出矩阵
-#         self.dropout = nn.Dropout(dropout)
-#
-#     @staticmethod
-#     def attention(query, key, value, mask, dropout: nn.Dropout):
-#         d_k = query.shape[-1]
-#         # Just apply the formula from the paper
-#         # (batch, h, seq_len, d_k) --> (batch, h, seq_len, seq_len)
-#         attention_scores = (query @ key.transpose(-2, -1)) / math.sqrt(d_k)
-#         if mask is not None:
-#             # Write a very low value (indicating -inf) to the positions where mask == 0
-#             # 作用就是人为的控制token之间的关联关系，比如字符序列中，我不希望字符a和字符b之间有关联，
-#             # 那么设置矩阵中对应位置的值为接近0的数值，那么后续通过softmax后，值为接近0的
-#             attention_scores.masked_fill_(mask == 0, -1e9)
-#         # (batch, h, seq_len, seq_len) # Apply softmax，这里其实就能看到单词token之间的关联程度（分数了）
-#         attention_scores = attention_scores.softmax(dim=-1)
-#         if dropout is not None:
-#             attention_scores = dropout(attention_scores)
-#         # (batch, h, seq_len, seq_len) --> (batch, h, seq_len, d_k)
-#         # return attention scores which can be used for visualization
-#         return (attention_scores @ value), attention_scores
-#
-#     def forward(self, q, k, v, mask):
-#         query = self.w_q(q)     # (batch, seq_len, d_model) --> (batch, seq_len, d_model)
-#         key = self.w_k(k)       # (batch, seq_len, d_model) --> (batch, seq_len, d_model)
-#         value = self.w_v(v)     # (batch, seq_len, d_model) --> (batch, seq_len, d_model)
-#
-#         # 这里就是将q、k、v进行了多头的切分工作，即对d_model进行切分，分成h头，每一个头的维度为d_k
-#         # (batch, seq_len, d_model) --> (batch, seq_len, h, d_k) --> (batch, h, seq_len, d_k)
-#         query = query.view(query.shape[0], query.shape[1], self.h, self.d_k).transpose(1, 2)
-#         key = key.view(key.shape[0], key.shape[1], self.h, self.d_k).transpose(1, 2)
-#         value = value.view(value.shape[0], value.shape[1], self.h, self.d_k).transpose(1, 2)
-#
-#         # Calculate attention 在每一个头上分别运用注意力公式
-#         x, self.attention_scores = MultiHeadAttentionBlock.attention(query, key, value, mask, self.dropout)
-#
-#         # Combine all the heads together，将多个头的注意力结果合并
-#         # (batch, h, seq_len, d_k) --> (batch, seq_len, h, d_k) --> (batch, seq_len, d_model)
-#         x = x.transpose(1, 2).contiguous().view(x.shape[0], -1, self.h * self.d_k)
-#
-#         # Multiply by Wo，将合并后的结果乘以矩阵W_o，论文里的公式要求最后这里要乘一下
-#         # (batch, seq_len, d_model) --> (batch, seq_len, d_model)
-#         return self.w_o(x)
+'''
+多头注意力机制的具体实现
+'''
+class MultiHeadAttentionBlock(nn.Module):
+
+    def __init__(self, d_model: int, h: int, dropout: float) -> None:
+        super().__init__()
+        self.d_model = d_model  # Embedding vector size
+        self.h = h  # Number of heads
+        # Make sure d_model is divisible by h
+        assert d_model % h == 0, "d_model is not divisible by h"
+
+        self.d_k = d_model // h # Dimension of vector seen by each head 每一个头的向量维度
+        self.w_q = nn.Linear(d_model, d_model)  # 对应多头注意力block中的第一个输入要乘的矩阵 Wq
+        self.w_k = nn.Linear(d_model, d_model)  # 对应多头注意力block中的第二个输入要乘的矩阵 Wk
+        self.w_v = nn.Linear(d_model, d_model)  # 对应多头注意力block中的第三个输入要乘的矩阵 Wv
+
+        self.w_o = nn.Linear(d_model, d_model)  # 多头concat之后的输出矩阵
+        self.dropout = nn.Dropout(dropout)
+
+    @staticmethod
+    def attention(query, key, value, mask, dropout: nn.Dropout):
+        d_k = query.shape[-1]
+        # Just apply the formula from the paper
+        # (batch, h, seq_len, d_k) --> (batch, h, seq_len, seq_len)
+        attention_scores = (query @ key.transpose(-2, -1)) / math.sqrt(d_k)
+        if mask is not None:
+            # Write a very low value (indicating -inf) to the positions where mask == 0
+            # 作用就是人为的控制token之间的关联关系，比如字符序列中，我不希望字符a和字符b之间有关联，
+            # 那么设置矩阵中对应位置的值为接近0的数值，那么后续通过softmax后，值为接近0的
+            attention_scores.masked_fill_(mask == 0, -1e9)
+        # (batch, h, seq_len, seq_len) # Apply softmax，这里其实就能看到单词token之间的关联程度（分数了）
+        attention_scores = attention_scores.softmax(dim=-1)
+        if dropout is not None:
+            attention_scores = dropout(attention_scores)
+        # (batch, h, seq_len, seq_len) --> (batch, h, seq_len, d_k)
+        # return attention scores which can be used for visualization
+        return (attention_scores @ value), attention_scores
+
+    def forward(self, q, k, v, mask):
+        query = self.w_q(q)     # (batch, seq_len, d_model) --> (batch, seq_len, d_model)
+        key = self.w_k(k)       # (batch, seq_len, d_model) --> (batch, seq_len, d_model)
+        value = self.w_v(v)     # (batch, seq_len, d_model) --> (batch, seq_len, d_model)
+
+        # 这里就是将q、k、v进行了多头的切分工作，即对d_model进行切分，分成h头，每一个头的维度为d_k
+        # (batch, seq_len, d_model) --> (batch, seq_len, h, d_k) --> (batch, h, seq_len, d_k)
+        query = query.view(query.shape[0], query.shape[1], self.h, self.d_k).transpose(1, 2)
+        key = key.view(key.shape[0], key.shape[1], self.h, self.d_k).transpose(1, 2)
+        value = value.view(value.shape[0], value.shape[1], self.h, self.d_k).transpose(1, 2)
+
+        # Calculate attention 在每一个头上分别运用注意力公式
+        x, self.attention_scores = MultiHeadAttentionBlock.attention(query, key, value, mask, self.dropout)
+
+        # Combine all the heads together，将多个头的注意力结果合并
+        # (batch, h, seq_len, d_k) --> (batch, seq_len, h, d_k) --> (batch, seq_len, d_model)
+        x = x.transpose(1, 2).contiguous().view(x.shape[0], -1, self.h * self.d_k)
+
+        # Multiply by Wo，将合并后的结果乘以矩阵W_o，论文里的公式要求最后这里要乘一下
+        # (batch, seq_len, d_model) --> (batch, seq_len, d_model)
+        return self.w_o(x)
 
 # '''
 # 残差连接，其实就是论文里用于在多个层之间进行跳跃连接的那个机制
