@@ -202,9 +202,51 @@ class Encoder(nn.Module):
         # 过N个EncoderBlock
         for layer in self.layers:
             x = layer(x, mask)
-        # 功能实现上最后过一道Norm
+        # 工程实现上最后过一道Norm
         return self.norm(x)
 
+'''
+解码器中的一个block，内含一个自多头注意力block，一个交叉多头注意力block，三个残差连接，一个前馈连接
+'''
+class DecoderBlock(nn.Module):
 
+    def __int__(self, features: int, self_attention_block: MultiHeadAttentionBlock, cross_attention_block: MultiHeadAttentionBlock, feed_forward_block: FeedForwardBlock, dropout: float) -> None:
+        super().__int__()
+        self.self_attention_block = self_attention_block
+        self.cross_attention_block = cross_attention_block
+        self.feed_forward_block = feed_forward_block
+        self.residual_connections = nn.ModuleList([ResidualConnection(features, dropout) for _ in range(3)])
+
+    '''
+        x:解码器的输入
+        encoder_output：编码器的输出，会作为解码器内交叉多头注意力block的k、v输入
+        src_mask：编码器的mask
+        tgt_mask：解码器的mask
+    '''
+    def forward(self, x, encoder_output, src_mask, tgt_mask):
+        # 第一个残差连接，自多头注意力block
+        x = self.residual_connections[0](x, lambda x: self.self_attention_block(x, x, x, tgt_mask))
+        # 第二个残差连接，交叉多头注意力block
+        x = self.residual_connections[1](x, lambda x: self.cross_attention_block(x, encoder_output, encoder_output, src_mask))
+        # 第三个残差连接，前向连接block
+        x = self.residual_connections[2](x, self.feed_forward_block)
+        return x
+
+'''
+解码器完整实现，内含N个DecoderBlock
+'''
+class Decoder(nn.Module):
+
+    def __init__(self, layers: nn.ModuleList):
+        super().__init__()
+        self.layers = layers
+        self.norm = LayerNormalization()
+
+    def forward(self, x, encoder_output, src_mask, tgt_mask):
+        # 过N个DecoderBlock
+        for layer in self.layers:
+            x = layer(x, encoder_output, src_mask, tgt_mask)
+        # 工程实现上最后过一道Norm
+        return self.norm(x)
 
 
