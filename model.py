@@ -249,4 +249,55 @@ class Decoder(nn.Module):
         # 工程实现上最后过一道Norm
         return self.norm(x)
 
+'''
+投影层，将token的向量映射为词汇表位置结果（词汇表大小的一个向量）
+'''
+class ProjectionLayer(nn.Module):
 
+    def __init__(self, d_model, vocab_size) -> None:
+        super().__init__()
+        # 全连接层，将d_model映射到vocab_size
+        self.proj = nn.Linear(d_model, vocab_size)
+
+    def forward(self, x):
+        # (batch, seq_len, d_model) --> (batch, seq_len, vocab_size)
+        # 将批次序列长度转换成批次序列长度词汇表大小
+        return torch.log_softmax(self.proj(x), dim=-1)
+
+'''
+构建整个Transformer网络结构，内含：
+一个编码器
+一个解码器
+一个源输入embedding
+一个目标输入embedding
+一个源位置编码器
+一个目标位置编码器
+一个投影层
+'''
+class Transformer(nn.Module):
+
+    def __init__(self, encoder: Encoder, decoder: Decoder, src_embed: InputEmbeddings, tgt_embed: InputEmbeddings, src_pos: PositionalEncoding, tgt_pos: PositionalEncoding, projection_layer: ProjectionLayer) -> None:
+        super().__init__()
+        self.encoder = encoder
+        self.decoder = decoder
+        self.src_embed = src_embed
+        self.tgt_embed = tgt_embed
+        self.src_pos = src_pos
+        self.tgt_pos = tgt_pos
+        self.projection_layer = projection_layer
+
+    def encode(self, src, src_mask):
+        # (batch, seq_len, d_model)
+        src = self.src_embed(src)
+        src = self.src_pos(src)
+        return self.encoder(src, src_mask)
+
+    def decode(self, encoder_output, src_mask, tgt, tgt_mask):
+        # (batch, seq_len, d_model)
+        tgt = self.tgt_embed(tgt)
+        tgt = self.tgt_pos(tgt)
+        return self.decoder(tgt, encoder_output, src_mask, tgt_mask)
+
+    def project(self, x):
+        # (batch, seq_len, vocab_size)
+        return self.projection_layer(x)
